@@ -35,19 +35,29 @@ jobs:
           ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
           ECR_REPOSITORY: ${{ secrets.AWS_ECR_REPOSITORY_NAME }}
         run: |
-          docker build --no-cache -t $ECR_REGISTRY/$ECR_REPOSITORY:latest ./backend
+          IMAGE_TAG=${GITHUB_SHA::7}
+          docker build --no-cache -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -t $ECR_REGISTRY/$ECR_REPOSITORY:latest ./backend
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+          echo "IMAGE_URI=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_ENV
 
-      - name: Deploy to App Runner
+      - name: Update App Runner and deploy
         env:
           APP_RUNNER_SERVICE_ARN: ${{ secrets.APP_RUNNER_SERVICE_ARN }}
+          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+          ECR_REPOSITORY: ${{ secrets.AWS_ECR_REPOSITORY_NAME }}
         run: |
-          if [ -n "$APP_RUNNER_SERVICE_ARN" ]; then
-            aws apprunner start-deployment --service-arn "$APP_RUNNER_SERVICE_ARN"
-            echo "App Runner deployment started. Check AWS console for status."
-          else
-            echo "APP_RUNNER_SERVICE_ARN not set, skipping App Runner deployment."
+          if [ -z "$APP_RUNNER_SERVICE_ARN" ]; then
+            echo "APP_RUNNER_SERVICE_ARN not set, skipping App Runner."
+            exit 0
           fi
+          IMAGE_URI="$ECR_REGISTRY/$ECR_REPOSITORY:${GITHUB_SHA::7}"
+          echo "Updating App Runner to image: $IMAGE_URI"
+          aws apprunner update-service \
+            --service-arn "$APP_RUNNER_SERVICE_ARN" \
+            --source-configuration "{\"ImageRepository\":{\"ImageIdentifier\":\"$IMAGE_URI\",\"ImageRepositoryType\":\"ECR\"}}"
+          echo "App Runner update started. Check AWS console for deployment status."
 
   deploy-frontend:
     name: Build & Deploy Frontend
