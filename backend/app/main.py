@@ -8,10 +8,12 @@ except ImportError:
 
 import os
 
+import re
 import traceback
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
+from starlette.middleware.base import BaseHTTPMiddleware
 from app.db.session import engine, Base
 from app.models.models import User, Message
 from app.api.v1 import auth, chat
@@ -30,6 +32,32 @@ else:
 
 # S3 静的サイトのオリジンを正規表現でも許可（ホスト名の微妙な差に対応）
 _origin_regex = r"https?://cursor-depoly\.s3-website(-[a-z0-9-]+)?\.amazonaws\.com"
+_s3_origin_pattern = re.compile(_origin_regex)
+
+
+class OptionsCORSMiddleware(BaseHTTPMiddleware):
+    """OPTIONS プリフライトを確実に 200 で返す（App Runner 等で 400 になる対策）"""
+
+    async def dispatch(self, request, call_next):
+        if request.method != "OPTIONS":
+            return await call_next(request)
+        origin = request.headers.get("origin", "")
+        if not origin and request.headers.get("Origin"):
+            origin = request.headers.get("Origin")
+        allow_origin = origin if (_s3_origin_pattern.match(origin) or origin in allow_origins) else allow_origins[0] if allow_origins else "*"
+        return Response(
+            status_code=200,
+            headers={
+                "Access-Control-Allow-Origin": allow_origin,
+                "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+                "Access-Control-Allow-Credentials": "true",
+                "Access-Control-Max-Age": "86400",
+            },
+        )
+
+
+app.add_middleware(OptionsCORSMiddleware)
 _middleware_kw: dict = {
     "allow_origins": allow_origins,
     "allow_credentials": True,
