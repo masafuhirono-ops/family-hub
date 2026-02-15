@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google'
 import { jwtDecode } from 'jwt-decode'
 import Chat from './Chat'
+import { baseURL } from './api'
 
 const GOOGLE_CLIENT_ID =
   import.meta.env.VITE_GOOGLE_CLIENT_ID ||
@@ -19,7 +20,10 @@ function AppContent() {
   if (user) {
     return (
       <div style={{ minHeight: '100vh', background: '#f3f4f6' }}>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', padding: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 16, flexWrap: 'wrap', gap: 8 }}>
+          <span style={{ color: '#6b7280', fontSize: 12 }}>
+            API: {baseURL ? baseURL.replace(/^https?:\/\//, '').replace(/\/$/, '') : '未設定（送信できません）'}
+          </span>
           <span style={{ marginRight: 12, color: '#6b7280' }}>{user.name} さん</span>
           <button
             onClick={() => setUser(null)}
