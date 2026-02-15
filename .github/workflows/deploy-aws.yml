@@ -42,6 +42,24 @@ jobs:
           echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
           echo "IMAGE_URI=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_ENV
 
+      - name: Wait for App Runner ready
+        env:
+          APP_RUNNER_SERVICE_ARN: ${{ secrets.APP_RUNNER_SERVICE_ARN }}
+        run: |
+          if [ -z "$APP_RUNNER_SERVICE_ARN" ]; then exit 0; fi
+          echo "Waiting for App Runner service to be RUNNING..."
+          for i in $(seq 1 15); do
+            STATUS=$(aws apprunner describe-service --service-arn "$APP_RUNNER_SERVICE_ARN" --query 'Service.Status' --output text 2>/dev/null || echo "UNKNOWN")
+            echo "Current status: $STATUS"
+            if [ "$STATUS" = "RUNNING" ]; then
+              echo "Service is RUNNING. Waiting 30s for any in-progress operation to settle..."
+              sleep 30
+              break
+            fi
+            if [ $i -eq 15 ]; then echo "Timeout waiting for RUNNING."; exit 1; fi
+            sleep 20
+          done
+
       - name: Update App Runner and deploy
         env:
           APP_RUNNER_SERVICE_ARN: ${{ secrets.APP_RUNNER_SERVICE_ARN }}
@@ -54,10 +72,18 @@ jobs:
           fi
           IMAGE_URI="$ECR_REGISTRY/$ECR_REPOSITORY:${GITHUB_SHA::7}"
           echo "Updating App Runner to image: $IMAGE_URI"
-          aws apprunner update-service \
-            --service-arn "$APP_RUNNER_SERVICE_ARN" \
-            --source-configuration "{\"ImageRepository\":{\"ImageIdentifier\":\"$IMAGE_URI\",\"ImageRepositoryType\":\"ECR\"}}"
-          echo "App Runner update started. Check AWS console for deployment status."
+          for attempt in 1 2 3 4 5; do
+            if aws apprunner update-service \
+              --service-arn "$APP_RUNNER_SERVICE_ARN" \
+              --source-configuration "{\"ImageRepository\":{\"ImageIdentifier\":\"$IMAGE_URI\",\"ImageRepositoryType\":\"ECR\"}}"; then
+              echo "App Runner update started. Check AWS console for deployment status."
+              exit 0
+            fi
+            echo "Update failed (attempt $attempt). If OPERATION_IN_PROGRESS, waiting 90s..."
+            sleep 90
+          done
+          echo "Update failed after 5 attempts."
+          exit 1
 
   deploy-frontend:
     name: Build & Deploy Frontend
