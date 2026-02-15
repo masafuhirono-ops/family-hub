@@ -8,8 +8,10 @@ except ImportError:
 
 import os
 
-from fastapi import FastAPI
+import traceback
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from app.db.session import engine, Base
 from app.models.models import User, Message
 from app.api.v1 import auth, chat
@@ -26,11 +28,14 @@ if _cors_origins:
 else:
     allow_origins = ["http://localhost:5173", "http://127.0.0.1:5173"]
 
+# S3 静的サイトのオリジンを正規表現でも許可（ホスト名の微妙な差に対応）
+_origin_regex = r"https?://cursor-depoly\.s3-website(-[a-z0-9-]+)?\.amazonaws\.com"
 _middleware_kw: dict = {
     "allow_origins": allow_origins,
     "allow_credentials": True,
-    "allow_methods": ["*"],
+    "allow_methods": ["GET", "POST", "OPTIONS", "PUT", "DELETE"],
     "allow_headers": ["*"],
+    "allow_origin_regex": _origin_regex,
 }
 if not _cors_origins:
     _middleware_kw["allow_origin_regex"] = r"https?://(192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+):5173|https://[a-z0-9-]+\.(ngrok-free\.app|ngrok\.io|ngrok-free\.dev)"
@@ -42,6 +47,14 @@ app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
 
 # チャット用ルーターの登録
 app.include_router(chat.router, prefix="/api/v1/chat", tags=["chat"])
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """500 の原因をログに出す"""
+    tb = traceback.format_exc()
+    print(f"Unhandled exception: {exc}\n{tb}")
+    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
+
 
 @app.get("/")
 def read_root():
