@@ -2,6 +2,10 @@ import { useState, useEffect, useRef } from 'react'
 import axios from 'axios'
 import { api } from './api'
 
+const APP_VERSION = import.meta.env.VITE_APP_VERSION || 'dev'
+const BUILD_TIME = import.meta.env.VITE_BUILD_TIME || ''
+const VERSION_LABEL = BUILD_TIME ? `v.${APP_VERSION} · ${BUILD_TIME}` : `v.${APP_VERSION}`
+
 type Message = {
   id: number
   sender_name: string
@@ -87,6 +91,7 @@ export default function Chat({ userName, idToken, onAuthError }: ChatProps) {
     <div style={styles.container}>
       <h2 style={styles.title}>家族チャット</h2>
       <p style={styles.subtitle}>ようこそ {userName} さん</p>
+      <p style={{ color: '#9ca3af', fontSize: 12, marginTop: 4, marginBottom: 0 }}>{VERSION_LABEL}</p>
 
       <div style={styles.messagesBox}>
         {loading ? (
