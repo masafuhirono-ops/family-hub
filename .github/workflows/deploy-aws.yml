@@ -48,16 +48,31 @@ jobs:
         run: |
           if [ -z "$APP_RUNNER_SERVICE_ARN" ]; then exit 0; fi
           echo "Checking App Runner service status..."
+          unknown_count=0
           for i in $(seq 1 15); do
             STATUS=$(aws apprunner describe-service --service-arn "$APP_RUNNER_SERVICE_ARN" --query 'Service.Status' --output text 2>/dev/null || echo "UNKNOWN")
             echo "Current status: $STATUS"
+            if [ "$STATUS" = "UNKNOWN" ]; then
+              unknown_count=$((unknown_count + 1))
+              if [ $i -eq 1 ]; then
+                echo "describe-service failed. Actual error:"
+                aws apprunner describe-service --service-arn "$APP_RUNNER_SERVICE_ARN" --query 'Service.Status' --output text 2>&1 || true
+              fi
+              if [ $unknown_count -ge 5 ]; then
+                echo "APP_RUNNER_SKIP=1" >> $GITHUB_ENV
+                echo "::warning::describe-service keeps failing (wrong ARN or missing apprunner:DescribeService?). Skipping App Runner update. Check APP_RUNNER_SERVICE_ARN and IAM."
+                exit 0
+              fi
+            else
+              unknown_count=0
+            fi
             if [ "$STATUS" = "DELETED" ]; then
               echo "APP_RUNNER_SKIP=1" >> $GITHUB_ENV
               echo "Service is DELETED. Create a new App Runner service and set APP_RUNNER_SERVICE_ARN in Secrets."
               exit 0
             fi
             if [ "$STATUS" = "CREATE_FAILED" ] || [ "$STATUS" = "DELETE_FAILED" ]; then
-              echo "::error::App Runner service is in $STATUS. Check AWS Console (App Runner) for details. You may need to delete and recreate the service."
+              echo "::error::App Runner service is in $STATUS. Check AWS Console (App Runner) for details."
               exit 1
             fi
             if [ "$STATUS" = "RUNNING" ]; then
