@@ -130,11 +130,19 @@ jobs:
         working-directory: frontend
         run: npm ci || npm install
 
+      - name: Set build version
+        id: build-version
+        run: |
+          echo "version=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+          echo "build_time=$(date -u +%Y-%m-%dT%H:%MZ)" >> $GITHUB_OUTPUT
+
       - name: Build frontend
         working-directory: frontend
         env:
           VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
           VITE_API_URL: ${{ secrets.VITE_API_URL }}
+          VITE_APP_VERSION: ${{ steps.build-version.outputs.version }}
+          VITE_BUILD_TIME: ${{ steps.build-version.outputs.build_time }}
         run: npm run build
 
       - name: Configure AWS credentials
