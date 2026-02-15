@@ -6,7 +6,11 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from google.oauth2 import id_token
 from google.auth.transport import requests
 
-GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
+# ローカル: .env が読めない場合のフォールバック（フロントと同じ値）
+GOOGLE_CLIENT_ID = os.getenv(
+    "GOOGLE_CLIENT_ID",
+    "558585274838-u6tav0qdsj1ffpa3o59nfaepto210b49.apps.googleusercontent.com",
+)
 # 本番環境用: 家族のメールをカンマ区切りで指定。未設定なら認証済み全員を許可
 WHITELIST_EMAILS_STR = os.getenv("FAMILY_WHITELIST_EMAILS", "")
 WHITELIST_EMAILS = [e.strip() for e in WHITELIST_EMAILS_STR.split(",") if e.strip()]
